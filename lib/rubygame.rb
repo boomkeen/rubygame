@@ -20,24 +20,29 @@
 #++
 
 
-# Require Rubygame files. If these fail, don't rescue.
-# Note: screen.rb is intentionally loaded late.
+module Rubygame
+
+# These features are safe to autoload when needed.
+autoload :Clock,         "rubygame/clock"
+autoload :Color,         "rubygame/color"
+autoload :GL,            "rubygame/gl"
+autoload :ImageFont,     "rubygame/imagefont"
+autoload :Joystick,      "rubygame/joystick"
+autoload :NamedResource, "rubygame/named_resource"
+autoload :EventQueue,    "rubygame/queue"
+autoload :Sprites,       "rubygame/sprite"
+autoload :Vector2,       "rubygame/vector2"
+
+
+# These ones must be required at startup.
+# Note: rubygame/screen is intentionally loaded late.
 require "rubygame/main"
 require "rubygame/shared"
-require "rubygame/clock"
 require "rubygame/constants"
-require "rubygame/color"
 require "rubygame/event"
 require "rubygame/events"
 require "rubygame/event_handler"
-require "rubygame/gl"
-require "rubygame/imagefont"
-require "rubygame/joystick"
-require "rubygame/named_resource"
-require "rubygame/queue"
 require "rubygame/surface"
-require "rubygame/sprite"
-require "rubygame/vector2"
 
 
 # If RUBYGAME_NEWRECT is set, load the new Rect class. Otherwise load
@@ -99,4 +104,6 @@ require "rubygame/screen"
 unless /^(1|t|true|y|yes)$/i =~ ENV["RUBYGAME_NOINIT"]
   Rubygame.init
   at_exit { Rubygame.quit }
+end
+
 end
