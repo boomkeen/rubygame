@@ -78,6 +78,32 @@ module Rubygame
 		end
 		
 
+    # Same as Rubygame::Color::ColorRGB.new.
+    def self.rgb( color )
+      Rubygame::Color::ColorRGB.new( color )
+    end
+
+    # Same as Rubygame::Color::ColorRGB255.new.
+    def self.rgb255( color )
+      Rubygame::Color::ColorRGB255.new( color )
+    end
+
+    # Same as Rubygame::Color::ColorRGB255.hex.
+    def self.hex( string )
+      Rubygame::Color::ColorRGB255.hex( string )
+    end
+
+    # Same as Rubygame::Color::ColorHSV.new.
+    def self.hsv( color )
+      Rubygame::Color::ColorHSV.new( color )
+    end
+
+    # Same as Rubygame::Color::ColorHSL.new.
+    def self.hsl( color )
+      Rubygame::Color::ColorHSL.new( color )
+    end
+
+
     # For use by Rubygame methods only:
 
     # Convert a color name (string or symbol), hex color string, Color

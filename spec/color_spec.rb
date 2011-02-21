@@ -32,6 +32,42 @@ $colors = {
 
 
 
+describe Rubygame::Color do
+
+  it ".rgb should mirror ColorRGB.new" do
+    c = [0.1, 0.2, 0.3, 0.4]
+    ColorRGB.should_receive(:new).with(c).and_return(:result)
+    Rubygame::Color.rgb(c).should == :result
+  end
+
+  it ".rgb255 should mirror ColorRGB255.new" do
+    c = [1, 2, 3, 4]
+    ColorRGB255.should_receive(:new).with(c).and_return(:result)
+    Rubygame::Color.rgb255(c).should == :result
+  end
+
+  it ".hex should mirror ColorRGB255.hex" do
+    c = "#fff"
+    ColorRGB255.should_receive(:hex).with(c).and_return(:result)
+    Rubygame::Color.hex(c).should == :result
+  end
+
+  it ".hsv should mirror ColorHSV.new" do
+    c = [0.1, 0.2, 0.3, 0.4]
+    ColorHSV.should_receive(:new).with(c).and_return(:result)
+    Rubygame::Color.hsv(c).should == :result
+  end
+
+  it ".hsl should mirror ColorHSL.new" do
+    c = [0.1, 0.2, 0.3, 0.4]
+    ColorHSL.should_receive(:new).with(c).and_return(:result)
+    Rubygame::Color.hsl(c).should == :result
+  end
+
+end
+
+
+
 ##############################
 ##      SHARED  SPECS       ##
 ##############################
