@@ -50,6 +50,8 @@ module Rubygame
 				else
 					raise ArgumentError, "Invalid color: #{color.inspect}"
 				end
+
+				hash
 			end
 
 			# Returns the color as an RGBA array of floats ranging from 0.0 to 1.0.

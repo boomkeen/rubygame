@@ -54,6 +54,8 @@ module Rubygame
         else
           raise ArgumentError, "Invalid color: #{color.inspect}"
         end
+
+				hash
       end
 
       # Creates a new instance from an RGBA array of floats ranging
