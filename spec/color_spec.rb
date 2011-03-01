@@ -103,6 +103,23 @@ shared_examples_for "Color with RGBA array (shared)" do
     end
   end
 
+
+  it "#to_rgb should create a matching ColorRGB" do
+    @color.to_rgb.should eql(ColorRGB.new(@color))
+  end
+
+  it "#to_rgb255 should create a matching ColorRGB255" do
+    @color.to_rgb255.should eql(ColorRGB255.new(@color))
+  end
+
+  it "#to_hsl should create a matching ColorHSL" do
+    @color.to_hsl.should eql(ColorHSL.new(@color))
+  end
+
+  it "#to_hsv should create a matching ColorHSV" do
+    @color.to_hsv.should eql(ColorHSV.new(@color))
+  end
+
 end
 
 

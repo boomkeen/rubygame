@@ -68,6 +68,30 @@ module ColorBase
 	end
 
 
+  # Returns a new Rubygame::Color::ColorRGB matching this color.
+  def to_rgb
+    Rubygame::Color::ColorRGB.new(self)
+  end
+
+  # Returns a new Rubygame::Color::ColorRGB255 matching this color.
+  # (Note: ColorRGB255 stores each component as an integer ranging
+  # from 0 to 255, which may cause precision loss.)
+  # 
+  def to_rgb255
+    Rubygame::Color::ColorRGB255.new(self)
+  end
+
+  # Returns a new Rubygame::Color::ColorHSL matching this color.
+  def to_hsl
+    Rubygame::Color::ColorHSL.new(self)
+  end
+
+  # Returns a new Rubygame::Color::ColorHSV matching this color.
+  def to_hsv
+    Rubygame::Color::ColorHSV.new(self)
+  end
+
+
 	def to_s  # :nodoc:
 		"#<%s %s>"%[self.class.basename, to_ary.inspect]
 	end
