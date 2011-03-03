@@ -597,117 +597,45 @@ class Rubygame::Surface
   end
 
 
-  # Returns the palette of the Surface, as an array of [r,g,b] arrays
-  # (each component ranges from 0-255). See #set_palette for more
-  # information about Surface palettes.
-  # 
-  # Only Surfaces with 8-bit color depth or less can have a palette.
-  # If the Surface does not have a palette, this method returns nil.
+  # Returns a Surface::Palette instance representing this Surface's
+  # palette, or nil if this Surface has no palette. Only Surfaces with
+  # 8-bit color depth or less can have a palette.
   # 
   # NOTE: Surface palettes are not related to the
   # Rubygame::Color::Palette class.
   #
-  # 
   def palette
-    pal = @struct.format.palette
-    unless pal.pointer.null?
-      return pal.entries.collect { |color|  color.to_ary[0,3]  }
-    end
+    @palette || 
+      unless @struct.format.palette.null?
+        if frozen?
+          Rubygame::Surface::Palette.new(self)
+        else
+          @palette = Rubygame::Surface::Palette.new(self)
+        end
+      end
   end
 
 
-  # Replaces some or all of the colors in the Surface's palette.
+  # Replaces all the colors in the Surface's #palette. This is
+  # equivalent to <code>palette.replace(colors)</code> (see
+  # Surface::Palette#replace).
   # 
-  # NOTE: Surface palettes are not related to the
-  # Rubygame::Color::Palette class.
+  # values:: An array of colors, Surface::Palette::Slot instances, or
+  #          integer indices. See Surface::Palette#[]= for information
+  #          about how each value is interpreted.
+  # 
+  # Raises SDLError if the Surface does not support a palette (e.g.
+  # because its color depth is greater than 8-bit), or if something
+  # went wrong. (Unfortunately SDL provides no way to find out what
+  # the problem is.)
   #
-  # Only Surfaces with 8-bit color depth or less can have a palette.
-  # The number of entries in the palette depends on the color depth.
-  # For example:
-  # 
-  # * 1-bit = 2**1 = 2 entries
-  # * 2-bit = 2**2 = 4 entries
-  # * 4-bit = 2**4 = 16 entries
-  # * 8-bit = 2**8 = 256 entries
-  # 
-  # 
-  # This method takes these arguments:
-  #
-  # colors:: An Array of colors to apply to the palette. Each color
-  #          can be [r,g,b] (0-255), a color name, or Rubygame::Color.
-  # 
-  # opts::   An optional Hash of zero or more of the following options:
-  # 
-  #          :offset:: Replace the palette starting at this index.
-  #                    (Integer, default 0)
-  #
-  # Raises SDLError if an error if the Surface does not support a
-  # palette (e.g. because its color depth is greater than 8-bit), or
-  # if something went wrong. (Unfortunately SDL provides no way to
-  # find out what the problem is.)
-  #
-  # 
-  # Example:
-  #
-  #   include Rubygame
-  #   include Rubygame::Color
-  #   
-  #   
-  #   # Create a new 2-bit Surface.
-  #   # It has 4 entries in its palette, all black by default.
-  #   surf = Rubygame::Surface.new( [10,10], :depth => 2 )
-  #   surf.palette
-  #   # => [[0, 0, 0], [0, 0, 0], [0, 0, 0], [0, 0, 0]]
-  #   
-  #   
-  #   # Replace entry 3:
-  #   surf.set_palette( [[255,0,255]], :offset => 3 )
-  #   surf.palette
-  #   # => [[0, 0, 0], [0, 0, 0], [0, 0, 0], [255, 0, 255]]
-  #   
-  #   
-  #   # Replace entries 1 and 2:
-  #   surf.set_palette( [ColorRGB.new([1,0,0]), :blue], :offset => 1 )
-  #   surf.palette
-  #   # => [[0, 0, 0], [255, 0, 0], [0, 0, 255], [255, 0, 255]]
-  #   
-  #   
-  #   # Reverse the palette order (palette= is an alias for set_palette):
-  #   surf.palette = surf.palette.reverse
-  #   # => [[255, 0, 255], [0, 0, 255], [255, 0, 0], [255, 255, 255]]
-  #   
-  #   
-  #   # Change the palette to all red:
-  #   surf.palette = [:red]*4
-  #   # => [[255, 0, 0], [255, 0, 0], [255, 0, 0], [255, 0, 0]]
-  #   
-  #
-  def set_palette( colors, opts={} )
-    if @struct.format.palette.pointer.null?
+  def palette=( values )
+    unless palette
       raise Rubygame::SDLError, "#{depth}-bit Surface has no palette."
     end
-
-    raise "can't modify frozen object" if frozen?
-
-    offset = (opts[:offset] || 0).to_i
-
-    ncolors = colors.length
-    buf = FFI::Buffer.new( SDL::Color, ncolors )
-    colors.each_with_index do |color,i|
-      color = SDL::Color.new( Rubygame::Color.make_sdl_rgba(color) )
-      buf[i].put_bytes( 0, color.to_bytes )
-    end
-
-    result = SDL::SetPalette( @struct, SDL::LOGPAL, buf, offset, ncolors )
-    unless result == 1
-      raise Rubygame::SDLError, "Palette failed (reason unknown)"
-    end
-
-    return self
+    palette.replace(values)
+    self
   end
-
-  alias :palette= :set_palette
-
 
 
   # Blit (copy) all or part of the surface's image to another surface,
@@ -1297,7 +1225,7 @@ class Rubygame::Surface
       :pixels   => pixels,
       :opacity  => opacity,
       :colorkey => colorkey,
-      :palette  => palette,
+      :palette  => _palette,
       :clip     => SDL.GetClipRect(@struct).to_ary,
       :tainted  => tainted?,
       :frozen   => frozen?,
@@ -1332,7 +1260,7 @@ class Rubygame::Surface
     end
 
     if dump[:palette]
-      set_palette( dump[:palette] )
+      _set_palette( dump[:palette] )
     end
 
     self.clip = dump[:clip] if dump[:clip]
@@ -1349,10 +1277,433 @@ class Rubygame::Surface
   end
 
 
+  # Internal method used by Surface::Palette class to query the
+  # Surface about its palette, and by #marshal_dump to dump the
+  # palette to a simple Array.
+  # 
+  def _palette # :nodoc:
+    pal = @struct.format.palette
+    unless pal.pointer.null?
+      return pal.entries.collect { |color|  color.to_ary[0,3]  }
+    end
+  end
+
+
+  # Internal method used by Surface::Palette class to set the
+  # Surface's palette, and my #marshal_load to load the palette from a
+  # simple Array.
+  # 
+  def _set_palette( colors ) # :nodoc:
+    if @struct.format.palette.pointer.null?
+      raise Rubygame::SDLError, "#{depth}-bit Surface has no palette."
+    end
+
+    raise "can't modify frozen object" if frozen?
+
+    ncolors = colors.length
+    buf = FFI::Buffer.new( SDL::Color, ncolors )
+    colors.each_with_index do |color,i|
+      buf[i].put_bytes( 0, SDL::Color.new(color).to_bytes )
+    end
+
+    result = SDL::SetPalette( @struct, SDL::LOGPAL, buf, 0, ncolors )
+    unless result == 1
+      raise Rubygame::SDLError, "Palette failed (reason unknown)"
+    end
+
+    return self
+  end
+
+
   private
 
   def _map_sdl_color( color ) # :nodoc:
     SDL.MapRGBA( @struct.format, *Rubygame::Color.make_sdl_rgba(color) )
+  end
+
+end
+
+
+
+
+class Rubygame::Surface::Palette
+  attr_reader :surface
+
+  # Creates a new Palette instance referencing the given Surface.
+  def initialize( surface )
+    unless surface.is_a? Rubygame::Surface
+      raise TypeError, "Invalid Surface: #{surface.inspect}"
+    end
+    @surface = surface
+    pal = @surface._palette()
+    raise "Surface has no palette: #{surface.inspect}" if pal.nil?
+    @colors = pal.collect{ |color|
+      Rubygame::Color.rgb255(color).freeze
+    }
+  end
+
+
+  def to_s
+    "#<Palette of %s (%d colors)>"%[@surface, size]
+  end
+
+  def inspect
+    "#<Palette:0x%x of %s (%d colors)>"%[object_id, @surface, size]
+  end
+
+
+  # True if *all* of the following conditions are true:
+  # 
+  # * other is a Palette, Array, or has a #to_a method.
+  # * other has the same number of colors as this palette.
+  # * every color in this palette is equal (using ColorRGB255#==) to
+  #   the color with the same index in other.
+  # 
+  def ==( other )
+    if other.is_a? Rubygame::Surface::Palette
+      other = other.colors
+    elsif other.respond_to?(:to_a)
+      other = other.to_a
+    else
+      return false
+    end
+
+    @colors == other
+  end
+
+  # True if other is a Palette with the same Surface.
+  def eql?( other )
+    other.is_a? Rubygame::Surface::Palette and
+      @surface.equal?(other.surface)
+  end
+
+
+  # True if the Palette or its Surface are frozen.
+  def frozen?
+    super or @surface.frozen?
+  end
+
+
+  # Returns a new Array containing all the colors in the Palette as
+  # Rubygame::Color:ColorRGB255 instances, in order. Modifying the
+  # Array will not affect the Palette; use #replace for that.
+  # 
+  def colors
+    @colors.dup
+  end
+
+  # Returns the color at this index, as a Rubygame::Color:ColorRGB255
+  # instance. Negative indices are supported, with the usual meaning.
+  # Raises IndexError if the index is out of bounds.
+  # 
+  def color_at( index )
+    unless index.is_a? Integer
+      raise TypeError, "index is not an integer: #{index.inspect}"
+    end
+    i = index
+    i += size if i < 0
+    unless i.between?(0, size - 1)
+      raise IndexError, "index is out of bounds: #{index.inspect}"
+    end
+    @colors.at(i)
+  end
+
+
+  # Returns the number of colors in the Palette.
+  def size
+    @colors.size
+  end
+  alias :length :size
+
+
+  # Returns an Array of Palette::Slot instances for every slot in
+  # the Palette, in order.
+  # 
+  def to_a
+    (0...size).to_a.collect{ |i| at(i) }
+  end
+
+
+  # Iterate over all the slots in the Palette as Palette::Slot
+  # instances, in order.
+  # 
+  def each
+    size.times{ |i| yield at(i) }
+  end
+
+  include Enumerable
+
+
+  # Return a Palette::Slot representing the slot with this index.
+  # Negative indices are supported, with the usual meaning. Raises
+  # IndexError if the index is out of bounds.
+  # 
+  def []( index )
+    unless index.is_a? Integer
+      raise TypeError, "index is not an integer: #{index.inspect}"
+    end
+    i = index
+    i += size if i < 0
+    unless i.between?(0, size - 1)
+      raise IndexError, "index is out of bounds: #{index.inspect}"
+    end
+    Slot.new(self, i)
+  end
+  alias :at :[]
+
+
+  # Replace the color at this index. Raises an error if the Palette or
+  # its Surface is frozen. Raises IndexError if the index is out of
+  # bounds.
+  # 
+  # index:: An integer index. Negative indices are supported, with the
+  #         usual meaning.
+  # value:: A color, a Palette::Slot instance, or an integer index.
+  # 
+  # If +value+ is a Palette::Slot, this method reads its color
+  # immediately (using Palette::Slot#color). The Palette::Slot can
+  # belong to this Palette, or another Palette.
+  # 
+  # If +value+ is an integer index, this method reads the color of
+  # this Palette with that index.
+  # 
+  def []=( index, value )
+    raise "can't modify frozen object" if frozen?
+    unless index.is_a? Integer
+      raise( TypeError, "index is not an integer: #{index.inspect}" )
+    end
+    i = index
+    i += size if i < 0
+    unless i.between?(0, size - 1)
+      raise IndexError, "index is out of bounds: #{index.inspect}"
+    end
+    @colors[i] = _sanitize_input(value)
+    _update_surface()
+  end
+
+
+  # Replace all colors in the palette. This method directly affects
+  # the Palette. Raises an error if the Palette or its Surface is
+  # frozen.
+  # 
+  # values:: An array of colors, Palette::Slot instances, or integer
+  #          indices. See #[]= for information about how each value is
+  #          interpreted.
+  # 
+  # If +values+ is too short to fill the Palette, the rest of the
+  # Palette will be filled with black. If +values+ is too long to fit
+  # in the Palette, the excess values will be ignored.
+  # 
+  # If any value is invalid, raises an error without modifying the
+  # Palette.
+  # 
+  def replace( values )
+    raise "can't modify frozen object" if frozen?
+
+    colors = values.to_a.collect{ |v| _sanitize_input(v) }
+    if colors.size < @colors.size
+      black = Rubygame::Color.rgb255([0,0,0,255]).freeze
+      colors.fill(black, colors.size...@colors.size)
+    elsif colors.size > @colors.size
+      colors = colors[0...@colors.size]
+    end
+    @colors = colors
+
+    _update_surface()
+    self
+  end
+
+
+  # Reverse the order of the colors in the Palette. This method
+  # directly affects the Palette. Raises an error if the Palette or
+  # its Surface is frozen.
+  # 
+  def reverse!
+    raise "can't modify frozen object" if frozen?
+    @colors.reverse!
+    _update_surface()
+    self
+  end
+
+
+  # Rotates the order of colors in the Palette. This method directly
+  # affects the Palette. Raises an error if the Palette or its Surface
+  # is frozen.
+  # 
+  # n:: An integer telling how many positions to rotate.
+  # 
+  # If n is positive, the first n colors in the palette are moved to
+  # the back, like this:
+  # 
+  #   [1, 2, 3, 4, 5, 6]  -(rotate 2)->   [3, 4, 5, 6, 1, 2]
+  # 
+  # If n is negative, the last (-n) colors are moved to the front,
+  # like this:
+  # 
+  #   [1, 2, 3, 4, 5, 6]  -(rotate -2)->  [5, 6, 1, 2, 3, 4]
+  # 
+  def rotate!( n )
+    raise "can't modify frozen object" if frozen?
+    unless n.is_a? Integer
+      raise( TypeError, "n is not an integer: #{n.inspect}" )
+    end
+    if n != 0
+      n = n%@colors.size
+      @colors = @colors[n..-1] + @colors[0..(n-1)]
+      _update_surface()
+    end
+    self
+  end
+
+
+  # Shuffles (randomizes) the order of the colors in the Palette. This
+  # method directly affects the Palette. Raises an error if the
+  # Palette or its Surface is frozen.
+  # 
+  def shuffle!
+    raise "can't modify frozen object" if frozen?
+    @colors.shuffle!
+    _update_surface()
+    self
+  end
+
+
+  private
+
+
+  def _sanitize_input( input )
+    case input
+    when Slot
+      Rubygame::Color.rgb255(input.color).freeze
+    when Integer
+      at(input).color
+    else
+      Rubygame::Color.rgb255(Rubygame::Color.make_sdl_rgba(input)).freeze
+    end
+  end
+
+
+  def _update_surface
+    @surface._set_palette(@colors.collect{|c| c.to_sdl_rgba_ary})
+    self
+  end
+
+
+
+  # Slot represents a specific slot of a specific Palette. The Slot is
+  # defined by its Palette and index. Even if the Palette's colors
+  # change, the Slot always refers to the same index of that Palette.
+  # 
+  # For example, Slot 0 always refers to the first color of the
+  # Palette; if the Palette is reversed, Slot 0 refers to the new
+  # first color (which used to be the last).
+  # 
+  class Slot
+
+    attr_reader :palette, :index
+
+    # Create a new Slot instance representing the slot at the given
+    # index of the given palette.
+    # 
+    def initialize( palette, index )
+      unless palette.is_a? Rubygame::Surface::Palette
+        raise( TypeError, "invalid palette: #{palette.inspect}" )
+      end
+      unless index.is_a? Integer
+        raise( TypeError, "index is not an integer: #{index.inspect}" )
+      end
+      @palette = palette
+      @index = index
+    end
+
+
+    def to_s
+      "#<Palette::Slot %d>"%@index
+    end
+
+    def inspect
+      "#<Palette::Slot:0x%x %d of %s>"%[object_id, @index, @palette]
+    end
+
+
+    # True if any of these conditions are true:
+    # 
+    # * other is an integer equal to this Slot's #index
+    #   (using Integer#eql?).
+    # * other is a Slot with a #color equal to this Slot's #color
+    #   (using ColorRGB255#==).
+    # * other is any object equal to this Slot's #color
+    #   (using ColorRGB255#==).
+    # 
+    def ==( other )
+      case other
+      when Integer
+        @index.eql? other
+      when Slot
+        self.color == other.color
+      else
+        self.color == other
+      end
+    end
+
+    # True if other is a Slot with the same #palette and #index as
+    # this slot.
+    def eql?( other )
+      other.instance_of?(Slot) and
+        @palette.equal?(other.palette) and
+        @index.eql?(other.index)
+    end
+
+
+    # Returns the color that this Slot represents, as a
+    # Rubygame::Color::ColorRGB255 instance.
+    # 
+    def color
+      palette.color_at(@index)
+    end
+
+    # Returns the color that this Slot represents, as an RGBA array
+    # with each component ranging from 0.0 to 1.0.
+    # 
+    def to_rgba_ary
+      color.to_rgba_ary
+    end
+
+    # Returns the color that this Slot represents, as an RGBA array
+    # with each component ranging from 0 to 255.
+    # 
+    def to_sdl_rgba_ary
+      color.to_sdl_rgba_ary
+    end
+
+    # Returns the color that this Slot represents, as a new
+    # Rubygame::Color::ColorRGB instance.
+    # 
+    def to_rgb
+      color.to_rgb
+    end
+
+    # Returns the color that this Slot represents, as a new
+    # Rubygame::Color::ColorRGB255 instance.
+    # 
+    def to_rgb255
+      color.to_rgb255
+    end
+
+    # Returns the color that this Slot represents, as a new
+    # Rubygame::Color::ColorHSL instance.
+    # 
+    def to_hsl
+      color.to_hsl
+    end
+
+    # Returns the color that this Slot represents, as a new
+    # Rubygame::Color::ColorHSV instance.
+    # 
+    def to_hsv
+      color.to_hsv
+    end
+
   end
 
 end

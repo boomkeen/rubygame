@@ -306,10 +306,12 @@ describe Surface, "(marshalling)" do
   end
 
   it "should preserve palette" do
-    surf = Rubygame::Surface.new([10,20], :depth => 2)
+    surf = Surface.new([10,20], :depth => 2)
     surf.palette = [[0,1,2], [3,4,5], [6,7,8], [9,10,11]]
     surf2 = Marshal.load( Marshal.dump(surf) )
-    surf2.palette.should == [[0,1,2], [3,4,5], [6,7,8], [9,10,11]]
+    surf2.palette.colors.should ==
+      [Color.rgb255([0,1,2]), Color.rgb255([3,4,5]),
+       Color.rgb255([6,7,8]), Color.rgb255([9,10,11])]
   end
 
   it "should preserve clip" do
@@ -512,13 +514,23 @@ describe Surface, "(palette)" do
       @surf = Surface.new([1,1], :depth => 1)
     end
 
-    it "should have a palette with 2 entries" do
+    it "should have a palette" do
+      @surf.palette.should be_instance_of(Surface::Palette)
+    end
+
+    it "palette should have 2 colors" do
       @surf.palette.size.should == 2
     end
 
-    it "should have black and white entries" do
-      @surf.palette.should include([0,0,0])
-      @surf.palette.should include([255,255,255])
+    it "should have black and white colors" do
+      @surf.palette.colors.should include(Color.rgb255([0,0,0,255]))
+      @surf.palette.colors.should include(Color.rgb255([255,255,255,255]))
+    end
+
+    it "setting palette should perform Palette#replace" do
+      colors = [[255,0,0,255], [0,255,0,255]]
+      @surf.palette.should_receive(:replace).with(colors)
+      @surf.palette = colors
     end
   end
 
@@ -530,12 +542,24 @@ describe Surface, "(palette)" do
         @surf = Surface.new([1,1], :depth => d)
       end
 
-      it "should have a palette with #{2**d} entries" do
+      it "should have a Palette" do
+        @surf.palette.should be_instance_of(Surface::Palette)
+      end
+
+      it "palette should have #{2**d} colors" do
         @surf.palette.size.should == 2**d
       end
 
       it "palette should be all black by default" do
-        @surf.palette.each{ |entry|  entry.should == [0,0,0] }
+        @surf.palette.colors.each{ |c|
+          c.should == Color.rgb255([0,0,0,255])
+        }
+      end
+
+      it "setting palette should perform Palette#replace" do
+        colors = [[255,0,0,255], [0,255,0,255]]
+        @surf.palette.should_receive(:replace).with(colors)
+        @surf.palette = colors
       end
     end
 
@@ -548,102 +572,1024 @@ describe Surface, "(palette)" do
         Surface.new([1,1], :depth => i).palette.should be_nil
       }
     end
+
+    it "should raise SDLError when trying to set palette" do
+      (9..32).each { |i|
+        surf = Surface.new([1,1], :depth => i)
+        expect{ surf.palette = [:red] }.to raise_error(SDLError)
+      }
+    end
   end
 
 
 end
 
 
-describe Surface, "(set_palette)" do 
 
-  after(:each) do
-    Rubygame.quit
+describe Surface::Palette do 
+
+  it "should be Enumerable" do
+    Surface::Palette.should include(Enumerable)
   end
 
 
-  (2..8).each do |d|
-
-    describe "depth #{d}" do
-      before :each do
-        @surf = Surface.new([1,1], :depth => d)
-      end
-
-      it "should overwrite a single entry" do
-        @surf.set_palette([[1,2,3]])
-        @surf.palette[0..2].should == [[1,2,3], [0,0,0], [0,0,0]]
-      end
-
-      it "should overwrite multiple entries" do
-        @surf.set_palette([[1,2,3], [4,5,6]])
-        @surf.palette[0..2].should == [[1,2,3], [4,5,6], [0,0,0]]
-      end
-
-      it "should overwrite a single entry with an offset" do
-        @surf.set_palette([[1,2,3]], :offset => 1)
-        @surf.palette[0..2].should == [[0,0,0], [1,2,3], [0,0,0]]
-      end
-
-      it "should overwrite multiple entries with an offset" do
-        @surf.set_palette([[1,2,3], [4,5,6]], :offset => 1)
-        @surf.palette[0..3].should == [[0,0,0], [1,2,3], [4,5,6], [0,0,0]]
-      end
-
-      it "should work with a ColorRGB" do
-        @surf.set_palette([Rubygame::Color::ColorRGB.new([1,0,1])])
-        @surf.palette[0..2].should == [[255,0,255], [0,0,0], [0,0,0]]
-      end
-
-      it "should work with a ColorRGB255" do
-        @surf.set_palette([Rubygame::Color::ColorRGB255.new([255,0,255])])
-        @surf.palette[0..2].should == [[255,0,255], [0,0,0], [0,0,0]]
-      end
-
-      it "should work with a ColorHSV" do
-        @surf.set_palette([Rubygame::Color::ColorHSV.new([0.2,0.2,0.2])])
-        @surf.palette[0..2].should == [[49,51,41], [0,0,0], [0,0,0]]
-      end
-
-      it "should work with a ColorHSL" do
-        @surf.set_palette([Rubygame::Color::ColorHSL.new([0.2,0.2,0.2])])
-        @surf.palette[0..2].should == [[57,61,41], [0,0,0], [0,0,0]]
-      end
-
-      it "should work with a color name symbol" do
-        @surf.set_palette([:red])
-        @surf.palette[0..2].should == [[255,0,0], [0,0,0], [0,0,0]]
-      end
-
-      it "should work with a color name string" do
-        @surf.set_palette(["red"])
-        @surf.palette[0..2].should == [[255,0,0], [0,0,0], [0,0,0]]
-      end
-
-      it "should work with a hex color string" do
-        @surf.set_palette(["#f00"])
-        @surf.palette[0..2].should == [[255,0,0], [0,0,0], [0,0,0]]
-      end
-
-      it "should not work with invalid items" do
-        [nil, true, false, 1, 1.0, [1,2], {}].each do |invalid_item|
-          proc{ @surf.set_palette([invalid]) }.should raise_error
-        end
-      end
-
+  context ".new" do
+    it "should accept one Surface with a palette" do
+      surf = Surface.new([1,1], :depth => 8)
+      expect{Surface::Palette.new(surf)}.to_not raise_error
     end
 
-  end
+    it "should fail when given a Surface with no palette" do
+      bad_surf = Surface.new([1,1], :depth => 16)
+      expect{ Surface::Palette.new(surf) }.to raise_error
+    end
 
+    it "should fail when given no args" do
+      expect{Surface::Palette.new}.to raise_error(ArgumentError)
+    end
 
-  describe "depth >8" do
-    it "should raise SDLError" do
-      (9..32).each { |i|
-        lambda { 
-          Surface.new([1,1], :depth => i).set_palette([:black])
-        }.should raise_error(Rubygame::SDLError)
+    it "should fail when given too many args" do
+      expect{
+        Surface::Palette.new(@surf,@surf)
+      }.to raise_error(ArgumentError)
+    end
+
+    it "should fail when given an invalid arg" do
+      invalid = [true, false, nil, 1, 1.2, "str", :sym, Object.new]
+      invalid.each { |arg|
+        expect{
+          Surface::Palette.new(arg)
+        }.to raise_error(TypeError)
       }
     end
   end
 
+
+  (2..8).each do |depth|
+
+    context "with depth #{depth}" do
+
+      before :each do
+        @surf = Surface.new([1,1], :depth => depth)
+        @pal = @surf.palette
+      end
+
+
+      describe "#size" do
+        it "should return the correct number of colors" do
+          @pal.size.should == (2**depth)
+        end
+      end
+
+      describe "#length" do
+        it "should return the correct number of colors" do
+          @pal.size.should == (2**depth)
+        end
+      end
+
+      describe "#surface" do
+        it "should return the Surface it belongs to" do
+          @pal.surface.should equal(@surf)
+        end
+      end
+
+
+      describe "#==" do
+        before :each do
+          @colors = (0...@pal.size).collect{ |i| Color.rgb255([i,i,i,i]) }
+          @surf.palette = @colors
+        end
+
+        context "given a Palette" do
+          before :each do
+            @surf2 = Surface.new([1,1], :depth => depth)
+            @pal2 = @surf2.palette
+            @pal2.replace( @pal.colors )
+          end
+
+          it "should be true if it has all the same colors" do
+            @pal.should == @pal2
+          end
+
+          it "should be false if it has different colors" do
+            @pal2.replace( [[1,2,3,4]]*@pal.size )
+            @pal.should_not == @pal2
+          end
+
+          it "should be false if it has a different order" do
+            @pal2.replace( @pal.colors.reverse )
+            @pal.should_not == @pal2
+          end
+
+          if depth > 2
+            it "should be false if it has fewer colors" do
+              @surf2 = Surface.new([1,1], :depth => depth - 1)
+              @pal2 = @surf2.palette
+              @pal2.replace( @pal.colors[0, @pal2.size] )
+              @pal.should_not == @pal2
+            end
+          end
+
+          if depth < 8
+            it "should be false if it has more colors" do
+              @surf2 = Surface.new([1,1], :depth => depth + 1)
+              @pal2 = @surf2.palette
+              @pal2.replace( @pal.colors[0, @pal2.size] )
+              @pal.should_not == @pal2
+            end
+          end
+        end
+
+        context "given an Array of colors" do
+          it "should be true if it has all the same colors" do
+            @pal.should == @pal.colors
+          end
+
+          it "should be false if it has different colors" do
+            @pal.should_not == [[1,2,3,4]]*@pal.size
+          end
+
+          it "should be false if it has a different order" do
+            @pal.should_not == @pal.colors.reverse
+          end
+
+          if depth > 2
+            it "should be false if it has fewer colors" do
+              @pal.should_not == @pal.colors[0..-2]
+            end
+          end
+
+          if depth < 8
+            it "should be false if it has more colors" do
+              @pal.should_not == @pal.colors[0, @pal.size]+[1,2,3,4]
+            end
+          end
+        end
+
+        context "given an Array of Slots" do
+          before :each do
+            @surf2 = Surface.new([1,1], :depth => depth)
+            @pal2 = @surf2.palette
+          end
+
+          it "should be true if the slots have the same colors" do
+            @pal2.replace( @pal.colors )
+            @pal.should == @pal2.to_a
+          end
+
+          it "should be false if the slots have different colors" do
+            @pal2.replace( [[1,2,3,4]]*@pal.size )
+            @pal.should_not == @pal2.to_a
+          end
+
+          it "should be false if the slot colors have a different order" do
+            @pal2.replace( @pal.colors.reverse )
+            @pal.should_not == @pal2.to_a
+          end
+
+          if depth > 2
+            it "should be false if it has fewer slots" do
+              @pal2.replace( @pal.colors )
+              @pal.should_not == @pal2.to_a[0..-2]
+            end
+          end
+
+          if depth < 8
+            it "should be false if it has more slots" do
+              @pal2.replace( @pal.colors )
+              @pal.should_not == @pal2.to_a+[@pal[0]]
+            end
+          end
+        end
+
+      end
+
+
+      
+
+      it "should be frozen if its Surface is frozen" do
+        @surf.freeze
+        @pal.should be_frozen
+      end
+
+
+      describe "#colors" do
+        before :each do
+          @colors = (0...@pal.size).collect{ |i| Color.rgb255([i,i,i,i]) }
+          @surf.palette = @colors
+        end
+
+        it "should return an array of ColorRGB255 instances" do
+          pc = @pal.colors
+          pc.should be_instance_of(Array)
+          pc.each { |color|
+            color.should be_instance_of(Color::ColorRGB255)
+          }
+        end
+
+        it "should return the expected number of colors" do
+          @pal.colors.size.should == @pal.size
+        end
+
+        it "should return the colors in order" do
+          @pal.colors.each_with_index { |color, i|
+            color.to_a.should == [i,i,i,i]
+          }
+        end
+
+        it "all default colors should be frozen" do
+          surf = Surface.new([1,1], :depth => depth)
+          surf.palette.colors.each { |color| color.should be_frozen }
+        end
+
+        it "all colors should be frozen" do
+          @pal.colors.each { |color| color.should be_frozen }
+        end
+
+        it "modifying the array should not affect the Palette" do
+          pc = @pal.colors
+          pc[1] = Color.rgb255([1,2,3,4])
+          @pal.colors[1].should == Color.rgb255([1,1,1,1])
+        end
+
+        it "modifying the Palette later should not affect the array" do
+          pc = @pal.colors
+          @pal[1] = Color.rgb255([1,2,3,4])
+          pc[1].should == Color.rgb255([1,1,1,1])
+        end
+      end
+
+
+      describe "#color_at" do
+        before :each do
+          @colors = (0...@pal.size).collect{ |i| Color.rgb255([i,i,i,i]) }
+          @surf.palette = @colors
+        end
+
+        it "should return a ColorRGB255 instance" do
+          @pal.color_at(1).should be_instance_of(Color::ColorRGB255)
+        end
+
+        it "should return the expected color" do
+          @pal.color_at(1).should == [1,1,1,1]
+        end
+
+        it "should understand negative indices" do
+          i = @pal.size - 1
+          @pal.color_at(-1).should == [i,i,i,i]
+          @pal.color_at(-@pal.size).should == [0,0,0,0]
+        end
+
+        it "should raise IndexError if index is out of bounds" do
+          i = @pal.size
+          expect{ @pal.color_at(i) }.to raise_error(IndexError)
+          expect{ @pal.color_at(-i - 1) }.to raise_error(IndexError)
+        end
+
+        it "the color should be frozen" do
+          @pal.color_at(1).should be_frozen
+        end
+      end
+
+
+      describe "#to_a" do
+        it "should return an array of Palette::Slot instances" do
+          pa = @pal.to_a
+          pa.should be_instance_of(Array)
+          pa.each { |slot|
+            slot.should be_instance_of(Surface::Palette::Slot)
+          }
+        end
+
+        it "should return the expected number of slots" do
+          @pal.to_a.size.should == @pal.size
+        end
+
+        it "should return the slots in order" do
+          @pal.to_a.each_with_index { |slot, i|
+            slot.index.should == i
+          }
+        end
+
+        it "modifying the array should not affect the Palette" do
+          @pal[0] = [0,0,0,0]
+          @pal[1] = [1,1,1,1]
+          pa = @pal.to_a
+          pa[0] = pa[1]
+          @pal[0].should == [0,0,0,0]
+        end
+      end
+
+
+      describe "#each" do
+        it "should yield Palette::Slot instances" do
+          @pal.each{ |slot|
+            slot.should be_instance_of(Surface::Palette::Slot)
+          }
+        end
+
+        it "should yield the expected number of slots" do
+          count = 0
+          @pal.each{ |slot| count += 1 }
+          count.should == @pal.size
+        end
+
+        it "should yield the slots in order" do
+          @pal.each_with_index{ |slot, index|
+            slot.index.should == index
+          }
+        end
+      end
+
+
+      describe "#at" do
+        it "should return a Palette::Slot instance" do
+          @pal.at(1).should be_instance_of(Surface::Palette::Slot)
+        end
+
+        it "the slot should belong to this Palette" do
+          @pal.at(1).palette.should equal(@pal)
+        end
+
+        it "should return the expected slot" do
+          @pal.at(1).index.should == 1
+        end
+
+        it "should understand negative indices" do
+          @pal.at(-1).index.should == @pal.size - 1
+          @pal.at(-@pal.size).index.should == 0
+        end
+
+        it "should raise IndexError if index is out of bounds" do
+          i = @pal.size
+          expect{ @pal.at(i) }.to raise_error(IndexError)
+          expect{ @pal.at(-i - 1) }.to raise_error(IndexError)
+        end
+      end
+
+
+      describe "#[]" do
+        it "should return a Palette::Slot instance" do
+          @pal[1].should be_instance_of(Surface::Palette::Slot)
+        end
+
+        it "the slot should belong to this Palette" do
+          @pal[1].palette.should equal(@pal)
+        end
+
+        it "should return the expected slot" do
+          @pal[1].index.should == 1
+        end
+
+        it "should understand negative indices" do
+          @pal[-1].index.should == @pal.size - 1
+          @pal[-@pal.size].index.should == 0
+        end
+
+        it "should raise IndexError if index is out of bounds" do
+          i = @pal.size
+          expect{ @pal[i] }.to raise_error(IndexError)
+          expect{ @pal[-i - 1] }.to raise_error(IndexError)
+        end
+      end
+
+
+      describe "#[]=" do
+        it "should understand negative indices" do
+          color = Color.rgb255([1,2,3,4])
+          @pal[-1] = color
+          @pal[@pal.size - 1].color.should == color
+          color2 = Color.rgb255([4,3,2,1])
+          @pal[-@pal.size] = color2
+          @pal[0].color.should == color2
+        end
+
+        it "should raise IndexError if index is out of bounds" do
+          color = Color.rgb255([1,2,3,4])
+          i = @pal.size
+          expect{ @pal[i] = color  }.to raise_error(IndexError)
+          expect{ @pal[-i - 1] = color }.to raise_error(IndexError)
+        end
+
+        color_scenarios = {
+          "given a Color"             => Rubygame::Color[:sky_blue],
+          "given a [R,G,B] array"     => [135, 206, 235],
+          "given a [R,G,B,A] array"   => [135, 206, 235, 255],
+          "given a color name symbol" => :sky_blue,
+          "given a color name string" => "sky_blue",
+          "given a hex color string"  => "#87ceeb",
+        }
+
+        color_scenarios.each do |scenario, arg|
+          context scenario do
+            it "should set the palette color" do
+              @pal[1] = arg
+              @pal[1].color.should == Color.rgb255([135, 206, 235, 255])
+            end
+          end
+        end
+
+        context "given an integer" do
+          it "should use the color from that index" do
+            @pal[1] = [1,2,3,4]
+            @pal[0] = 1
+            @pal[0].color.should == [1,2,3,4]
+          end
+
+          it "should raise IndexError if it is out of bounds" do
+            i = @pal.size
+            expect{ @pal[0] = i }.to raise_error(IndexError)
+            expect{ @pal[0] = -i - 1 }.to raise_error(IndexError)
+          end
+        end
+
+        context "given a Slot from itself" do
+          it "should use the color from that slot" do
+            @pal[1] = [1,2,3,4]
+            @pal[0] = @pal[1]
+            @pal[0].color.should == [1,2,3,4]
+          end
+        end
+
+        context "given a Slot from another Palette" do
+          it "should use the color from that Palette's slot" do
+            surf2 = Surface.new([1,1], :depth => 8)
+            surf2.palette[1] = [1,2,3,4]
+            @pal[0] = surf2.palette[1]
+            @pal[0].color.should == [1,2,3,4]
+          end
+        end
+      end # describe "#[]="
+
+
+      describe "#replace" do
+
+        it "should return self" do
+          @pal.replace([[1,2,3,4]]).should equal(@pal)
+        end
+
+        it "should replace all the colors" do
+          colors = (0...@pal.size).collect{ |i| [i,i,i,i] }
+          @pal.replace(colors)
+          @pal.colors.each_with_index{ |color, i|
+            color.should == colors[i]
+          }
+        end
+
+        context "given too many colors" do
+          it "should ignore the excess colors" do
+            colors = (0...@pal.size+1).collect{ |i| [i,i,i,i] }
+            expect{ @pal.replace(colors) }.to_not raise_error
+            @pal[0].color.should == [0,0,0,0]
+            @pal[-1].color.should == [@pal.size-1]*4
+          end
+        end
+
+        context "given too few colors" do
+          it "should use the given colors for the start" do
+            @pal.replace([[1,2,3,4]])
+            @pal[0].color.should == [1,2,3,4]
+          end
+
+          it "should fill in the rest with solid black" do
+            @pal.replace([[1,2,3,4]])
+            (1...@pal.size).each{ |i|
+              @pal[i].color.should == [0,0,0,255]
+            }
+          end
+        end
+
+        context "given an empty array" do
+          it "should fill in the entire palette with solid black" do
+            @pal.replace([])
+            (0...@pal.size).each{ |i|
+              @pal[i].color.should == [0,0,0,255]
+            }
+          end
+        end
+
+        color_scenarios = {
+          "Colors"             => Rubygame::Color[:sky_blue],
+          "[R,G,B] arrays"     => [135, 206, 235],
+          "[R,G,B,A] arrays"   => [135, 206, 235, 255],
+          "color name symbols" => :sky_blue,
+          "color name strings" => "sky_blue",
+          "hex color strings"  => "#87ceeb",
+        }
+
+        color_scenarios.each do |scenario, arg|
+          it "should understand #{scenario}" do
+            @pal.replace( [arg]*@pal.size )
+            @pal[0].color.should == Color.rgb255([135, 206, 235, 255])
+          end
+        end
+
+        it "should interpret integers as own Slot indices" do
+          @pal[1] = [1,2,3,4]
+          @pal.replace([1]*@pal.size)
+          @pal[0].color.should == [1,2,3,4]
+        end
+
+        it "should understand Slots from itself" do
+          @pal[1] = [1,2,3,4]
+          @pal.replace([@pal[1]]*@pal.size)
+          @pal[0].color.should == [1,2,3,4]
+        end
+
+        it "should understand Slots from another Palette" do
+          surf2 = Surface.new([1,1], :depth => 8)
+          surf2.palette[1] = [1,2,3,4]
+          @pal.replace([surf2.palette[1]]*@pal.size)
+          @pal[0].color.should == [1,2,3,4]
+        end
+
+
+        invalid_args = {
+          "true"          => true,
+          "false"         => false,
+          "nil"           => nil,
+          "a float"       => 1.0,
+          "a short array" => [1,2],
+          "a hash"        => {1=>2},
+          "some object"   => Object.new,
+        }
+
+        invalid_args.each do |scenario, arg|
+          context "given an invalid value (#{scenario})" do
+
+            it "should raise error" do
+              expect{ @pal.replace([[1,2,3,4], arg]) }.to raise_error
+            end
+
+            it "should not affect the Palette" do
+              orig = @pal.colors
+              begin
+                @pal.replace([[1,2,3,4], arg])
+              rescue
+              end
+              @pal.colors.should == orig
+            end
+
+          end
+        end
+
+      end # describe "#replace"
+
+
+      describe "#reverse!" do
+        it "should return self" do
+          @pal.reverse!.should equal(@pal)
+        end
+
+        it "should reverse the order of colors" do
+          expected = @pal.colors.reverse
+          @pal.reverse!
+          @pal.colors.should == expected
+        end
+      end
+
+
+      describe "#rotate!" do
+        before :each do
+          @colors = (0...@pal.size).collect{ |i| Color.rgb255([i,i,i,i]) }
+          @surf.palette = @colors
+        end
+
+        it "should return self" do
+          @pal.rotate!(1).should equal(@pal)
+        end
+
+        context "given a positive integer" do
+          it "should move colors at the front to the back" do
+            expected = @pal.colors[2..-1] + @pal.colors[0..1]
+            @pal.rotate!(2)
+            @pal.colors.should == expected
+          end
+        end
+
+        context "given a negative integer" do
+          it "should move colors at the back to the front" do
+            expected = @pal.colors[-2..-1] + @pal.colors[0..-3]
+            @pal.rotate!(-2)
+            @pal.colors.should == expected
+          end
+        end
+
+        context "given zero" do
+          it "should have no effect" do
+            expected = @pal.colors
+            @pal.rotate!(0)
+            @pal.colors.should == expected
+          end
+        end
+
+        invalid_args = {
+          "true"          => true,
+          "false"         => false,
+          "nil"           => nil,
+          "a string"      => "str",
+          "a symbol"      => :sym,
+          "a float"       => 1.0,
+          "an array"      => [1,2],
+          "a hash"        => {1=>2},
+          "some object"   => Object.new,
+        }
+
+        invalid_args.each do |scenario, arg|
+          context "given an invalid value (#{scenario})" do
+
+            it "should raise TypeError" do
+              expect{ @pal.rotate!(arg) }.to raise_error(TypeError)
+            end
+
+            it "should not affect the Palette" do
+              orig = @pal.colors
+              begin
+                @pal.rotate!(arg)
+              rescue
+              end
+              @pal.colors.should == orig
+            end
+
+          end
+        end
+      end
+
+
+      describe "#shuffle!" do
+        before :each do
+          @colors = (0...@pal.size).collect{ |i| Color.rgb255([i,i,i,i]) }
+          @surf.palette = @colors
+        end
+
+        it "should return self" do
+          @pal.shuffle!.should equal(@pal)
+        end
+
+        it "should have all the original colors" do
+          orig = @pal.colors
+          @pal.shuffle!
+          orig.each{ |c| @pal.colors.should include(c) }
+        end
+
+        it "should have the same size" do
+          orig = @pal.colors
+          @pal.shuffle!
+          @pal.size.should == orig.size
+        end
+
+        it "should shuffle the colors" do
+          # This is cheating, but I can't think of any other way to
+          # reliably test that the colors are shuffled.
+
+          colors = @pal.instance_eval{ @colors }
+          colors.should_receive(:shuffle!)
+          @pal.shuffle!
+        end
+      end
+
+
+    end # context "with depth ..."
+  end # (2..8).each
+
+end
+
+
+
+describe Surface::Palette::Slot do
+
+  before :each do
+    @surf = Surface.new([1,1], :depth => 8)
+    @pal = @surf.palette
+    @colors = (0...@pal.size).collect{ |i| [i,i,i,i] }
+    @pal.replace(@colors)
+  end
+
+
+  describe ".new" do
+    it "should accept a Palette and an integer index" do
+      expect{
+        Surface::Palette::Slot.new(@pal, 1)
+      }.to_not raise_error
+    end
+
+    invalid_args = {
+      "true"          => true,
+      "false"         => false,
+      "nil"           => nil,
+      "a string"      => "str",
+      "a symbol"      => :sym,
+      "a float"       => 1.0,
+      "an array"      => [1,2],
+      "a hash"        => {1=>2},
+      "some object"   => Object.new,
+    }
+
+    invalid_args.each do |scenario, arg|
+      it "should fail if palette is invalid (#{scenario})" do
+        expect{
+          Surface::Palette::Slot.new(arg, 1)
+        }.to raise_error(TypeError)
+      end
+
+      it "should fail if index is invalid (#{scenario})" do
+        expect{
+          Surface::Palette::Slot.new(@pal, arg)
+        }.to raise_error(TypeError)
+      end
+    end
+  end
+
+
+  describe "#palette" do
+    before :each do
+      @slot = Surface::Palette::Slot.new(@pal, 1)
+    end
+
+    it "should return the Slot's palette" do
+      slot = Surface::Palette::Slot.new(@pal, 1)
+      slot.palette.should equal(@pal)
+    end
+
+    it "should not be writable" do
+      slot = Surface::Palette::Slot.new(@pal, 1)
+      expect{ slot.palette = @pal }.to raise_error(NoMethodError)
+    end
+  end
+
+
+  describe "#index" do
+    before :each do
+      @slot = Surface::Palette::Slot.new(@pal, 1)
+    end
+
+    it "should return the Slot's index" do
+      slot = Surface::Palette::Slot.new(@pal, 1)
+      slot.index.should equal(1)
+    end
+
+    it "should not be writable" do
+      slot = Surface::Palette::Slot.new(@pal, 1)
+      expect{ slot.index = 2 }.to raise_error(NoMethodError)
+    end
+  end
+
+
+  describe "#==" do
+    before :each do
+      @slot = Surface::Palette::Slot.new(@pal, 1)
+    end
+
+    context "given itself" do
+      it "should be true" do
+        @slot.should == @slot
+      end
+    end
+
+    context "given an equivalent Slot" do
+      it "should be true" do
+        @slot.should == Surface::Palette::Slot.new(@pal, 1)
+      end
+    end
+
+    context "given an integer" do
+      it "should be true if the integer matches index" do
+        @slot.should == 1
+      end
+
+      it "should be false if the integer does not match index" do
+        @slot.should_not == 2
+      end
+    end
+
+    context "given another Slot" do
+      it "should be true if the colors are equal" do
+        surf2 = Surface.new([1,1], :depth => 8)
+        surf2.palette[0] = [1,1,1,1]
+        @slot.should == Surface::Palette::Slot.new(surf2.palette, 0)
+      end
+
+      it "should be false if the colors are not equal" do
+        surf2 = Surface.new([1,1], :depth => 8)
+        surf2.palette[0] = [2,2,2,2]
+        @slot.should_not == Surface::Palette::Slot.new(surf2.palette, 0)
+      end
+    end
+
+    context "given a ColorRGB255" do
+      it "should be true if the colors are equal" do
+        @slot.should == Color.rgb255([1,1,1,1])
+      end
+
+      it "should be false if the colors are not equal" do
+        @slot.should_not == Color.rgb255([2,2,2,2])
+      end
+    end
+
+    context "given a ColorRGB" do
+      it "should be true if the colors are equal" do
+        @slot.should == Color.rgb255([1,1,1,1]).to_rgb
+      end
+
+      it "should be false if the colors are not equal" do
+        @slot.should_not == Color.rgb255([2,2,2,2]).to_rgb
+      end
+    end
+
+    context "given a ColorHSV" do
+      it "should be true if the colors are equal" do
+        @slot.should == Color.rgb255([1,1,1,1]).to_hsv
+      end
+
+      it "should be false if the colors are not equal" do
+        @slot.should_not == Color.rgb255([2,2,2,2]).to_hsv
+      end
+    end
+
+    context "given a ColorHSL" do
+      it "should be true if the colors are equal" do
+        @slot.should == Color.rgb255([1,1,1,1]).to_hsl
+      end
+
+      it "should be false if the colors are not equal" do
+        @slot.should_not == Color.rgb255([2,2,2,2]).to_hsl
+      end
+    end
+
+    context "given an array of integers" do
+      it "should be true if equal to the Slot's color" do
+        @slot.should == [1,1,1,1]
+      end
+
+      it "should be false if not equal to the Slot's color" do
+        @slot.should_not == [2,2,2,2]
+      end
+    end
+
+    invalid_args = {
+      "true"          => true,
+      "false"         => false,
+      "nil"           => nil,
+      "a string"      => "str",
+      "a symbol"      => :sym,
+      "a float"       => 1.0,
+      "a short array" => [1,2],
+      "a hash"        => {1=>2},
+      "some object"   => Object.new,
+    }
+
+    invalid_args.each do |scenario, arg|
+      context "given #{scenario}" do
+        it "should be false" do
+          @slot.should_not == arg
+        end
+      end
+    end
+
+  end # describe "#=="
+
+
+  describe "#eql?" do
+    before :each do
+      @slot = Surface::Palette::Slot.new(@pal, 1)
+    end
+
+    context "given a Slot" do
+      it "should be true if it has the same palette and index" do
+        @slot.should eql( Surface::Palette::Slot.new(@pal,1) )
+      end
+
+      it "should be false if it has a different palette" do
+        pal2 = Surface.new([1,1], :depth => 8).palette
+        @slot.should_not eql( Surface::Palette::Slot.new(pal2,1) )
+      end
+
+      it "should be false if it has a different index" do
+        @slot.should_not eql(Surface::Palette::Slot.new(@pal,2) )
+      end
+    end
+
+    invalid_args = {
+      "true"              => true,
+      "false"             => false,
+      "nil"               => nil,
+      "a string"          => "str",
+      "a symbol"          => :sym,
+      "an integer"        => 1,
+      "a float"           => 1.0,
+      "a short array"     => [1,2],
+      "a hash"            => {1=>2},
+      "some object"       => Object.new,
+      "a [R,G,B] array"   => [1,1,1],
+      "a [R,G,B,A] array" => [1,1,1,1],
+      "a Color"           => Color.rgb255([1,1,1,1])
+    }
+
+    invalid_args.each do |scenario, arg|
+      context "given #{scenario}" do
+        it "should be false" do
+          @slot.should_not eql(arg)
+        end
+      end
+    end
+
+  end # describe "#eql?"
+
+
+  describe "#color" do
+    before :each do
+      @slot = Surface::Palette::Slot.new(@pal, 1)
+    end
+
+    it "should return a ColorRGB255 instance" do
+      @slot.color.should be_instance_of(Color::ColorRGB255)
+    end
+
+    it "should equal the Palette's color with this index" do
+      @slot.color.should == [1,1,1,1]
+    end
+
+    it "should reflect Palette changes made after Slot creation" do
+      @pal[1] = [1,2,3,4]
+      @slot.color.should == [1,2,3,4]
+    end
+
+    it "the color should be frozen" do
+      @slot.color.should be_frozen
+    end
+  end
+
+
+  describe "#to_rgba_ary" do
+    before :each do
+      @slot = Surface::Palette::Slot.new(@pal, 1)
+    end
+
+    it "should return an Array" do
+      @slot.to_rgba_ary.should be_instance_of( Array )
+    end
+
+    it "should equal the color as RGBA (0.0..1.0)" do
+      @slot.to_rgba_ary.should == [1/255.0]*4
+    end
+
+    it "should reflect Palette changes made after Slot creation" do
+      @pal[1] = [1,2,3,4]
+      @slot.to_rgba_ary.should == [1,2,3,4].collect{|i| i/255.0}
+    end
+  end
+
+
+  describe "#to_sdl_rgba_ary" do
+    before :each do
+      @slot = Surface::Palette::Slot.new(@pal, 1)
+    end
+
+    it "should return an Array" do
+      @slot.to_sdl_rgba_ary.should be_instance_of( Array )
+    end
+
+    it "should equal the color as RGBA (0..255)" do
+      @slot.to_sdl_rgba_ary.should == [1,1,1,1]
+    end
+
+    it "should reflect Palette changes made after Slot creation" do
+      @pal[1] = [1,2,3,4]
+      @slot.to_sdl_rgba_ary.should == [1,2,3,4]
+    end
+  end
+
+
+  models = {
+    "to_rgb"    => Color::ColorRGB,
+    "to_rgb255" => Color::ColorRGB255,
+    "to_hsv"    => Color::ColorHSV,
+    "to_hsl"    => Color::ColorHSL,
+  }
+
+  models.each do |method,klass|
+
+    describe "##{method}" do
+      before :each do
+        @slot = Surface::Palette::Slot.new(@pal, 1)
+      end
+
+      it "should return a #{klass.name}" do
+        @slot.send(method).should be_instance_of( klass )
+      end
+
+      it "should equal the slot's color" do
+        @slot.send(method).should == @slot.color
+      end
+
+      it "should reflect Palette changes made after Slot creation" do
+        new_color = Color.rgb255([1,2,3,4])
+        @pal[1] = new_color
+        @slot.send(method).should == new_color
+      end
+    end
+
+  end
 
 end
 
@@ -703,12 +1649,6 @@ describe "A frozen", Surface do
  
   it "palette should NOT raise error" do
     lambda{ @surface.palette }.should_not raise_error
-  end
-
-  it "set_palette should raise error" do
-    @surface = Surface.new([10,10], :depth => 2)
-    @surface.freeze
-    lambda{ @surface.set_palette([:blue]) }.should raise_error
   end
 
   it "palette= should raise error" do
