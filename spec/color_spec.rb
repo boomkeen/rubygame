@@ -1396,4 +1396,14 @@ describe "ColorRGB255" do
   end
 
 
+  ##############################
+  #       RGB255 to_hex        #
+  ##############################
+
+  describe "#to_hex" do
+    it "should return the color as a 8-digit hex color string" do
+      ColorRGB255.hex("#1234").to_hex.should == "#11223344"
+    end
+  end
+
 end

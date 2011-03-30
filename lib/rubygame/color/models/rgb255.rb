@@ -148,6 +148,25 @@ module Rubygame
         [@r, @g, @b, @a]
       end
 
+      # Returns the color as an 8-digit hex color string, in the form
+      # "#RRGGBBAA". See also ColorRGB255.hex.
+      # 
+      # Example:
+      # 
+      #   include Rubygame::Color
+      #   
+      #   color = ColorRGB255.hex("#124589ff")
+      #   # => #<ColorRGB255 [18, 69, 137, 255]>
+      #   color.to_hex
+      #   # => "#124589ff"
+      #   
+      #   ColorRGB255.hex("1234").to_hex
+      #   # => "#11223344"
+      # 
+      def to_hex
+        "#" + "%0.2x"%@r + "%0.2x"%@g + "%0.2x"%@b + "%0.2x"%@a
+      end
+
     end
   end
 end
