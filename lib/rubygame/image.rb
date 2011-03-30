@@ -116,10 +116,10 @@ class Rubygame::Surface
     # See Surface.load for a list of possible supported file types.
     # 
     def load_from_string( data, type=nil )
-      raw = FFI::MemoryPointer.new(:char, data.length)
-      raw.put_bytes(0, data)
-
-      rw = SDL.RWFromMem( raw, data.length )
+      size = data.respond_to?(:bytesize) ? data.bytesize : data.size
+      bytes = FFI::MemoryPointer.new(:char, size)
+      bytes.put_bytes(0, data, 0, size)
+      rw = SDL.RWFromMem(bytes, size)
 
       surf = if type
                SDL::Image.LoadTyped_RW(rw, 1, type)
@@ -132,7 +132,7 @@ class Rubygame::Surface
                "Couldn't load image from string: #{SDL.GetError()}" )
       end
 
-      return new(surf)
+      new(surf)
     end
 
   end
