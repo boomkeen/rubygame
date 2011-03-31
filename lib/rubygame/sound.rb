@@ -126,6 +126,7 @@ class Rubygame::Sound
       @struct  = sound
       @volume  = 1
       @channel = -1
+      @length  = length()
     else
       raise( NotImplementedError, "Sound.new is not implemented. "+
              "Use Sound.load to load a sound file." )
@@ -477,6 +478,31 @@ class Rubygame::Sound
     sound.volume = options[:volume] if options[:volume]
     sound.play(options)
     nil
+  end
+
+
+  # Returns the length of the Sound, in seconds.
+  # Returns nil if there is a problem calculating the length.
+  # 
+  def length
+    return @length if @length
+
+    num_bytes = @struct.alen
+    freq, fmt, chans = SDL::Mixer.QuerySpec()
+
+    case fmt
+    when SDL::AUDIO_U8, SDL::AUDIO_S8
+      sample_size = 1 # bytes
+    when SDL::AUDIO_U16LSB, SDL::AUDIO_S16LSB,
+         SDL::AUDIO_U16MSB, SDL::AUDIO_S16MSB,
+         SDL::AUDIO_U16SYS, SDL::AUDIO_S16SYS,
+         SDL::AUDIO_U16,    SDL::AUDIO_S16
+      sample_size = 2 # bytes
+    else
+      return nil
+    end
+
+    @struct.alen / sample_size / chans / freq.to_f
   end
 
 
