@@ -719,6 +719,93 @@ class Rubygame::Surface
   end
 
 
+  # Return the color of the pixel at coordinates [x,y], as a
+  # ColorRGB255 or Palette::Slot instance. Negative indices are not
+  # currently supported.
+  #
+  # If this Surface does not have a #palette (i.e. #depth > 8),
+  # returns a ColorRGB255 representing the color used by the pixel.
+  #
+  # If this Surface has a #palette (i.e. #depth <= 8), this method
+  # returns a Palette::Slot representing the palette index used by the
+  # pixel. (This can be significant if the palette has multiple slots
+  # with the same color.)
+  #
+  # If the Surface does not have a per-pixel alpha channel (i.e. not
+  # #flat?), alpha will always be 255. The Surface's #opacity does not
+  # affect the returned alpha value.
+  #
+  # Raises IndexError if the coordinates are out of bounds.
+  #
+  # Examples:
+  #
+  #   # To make sure you always end up with a ColorRGB255 instance,
+  #   # even if the Surface has a palette:
+  #   
+  #   color = my_surface[1,2].to_rgb255
+  #   # => #<ColorRGB255 ...>
+  #
+  def [](x,y)
+    unless x.is_a?(Numeric) and y.is_a?(Numeric)
+      raise TypeError, "invalid point [#{x.inspect}, #{y.inspect}]"
+    end
+
+    x, y = x.round, y.round
+
+    if( x < 0 or x >= @struct.w or y < 0 or y >= @struct.h)
+      raise( IndexError, "point [%d,%d] is out of bounds for %dx%d Surface"%\
+             [x, y, @struct.w, @struct.h] )
+    end
+
+    if @struct.format.palette.null?
+
+      # Surface has no palette, so return a ColorRGB255.
+
+      SDL.LockSurface(@struct)
+
+      bpp = @struct.format.BytesPerPixel
+      ptr = @struct.pixels + (y * @struct.pitch + x * bpp)
+
+      pixel =
+        case bpp
+        when 1
+          ptr.get_uint8(0)
+        when 2
+          ptr.get_uint16(0)
+        when 3
+          if( FFI::Platform::BYTE_ORDER == FFI::Platform::BIG_ENDIAN )
+            (ptr.get_uint8(0) << 16)|(ptr.get_uint8(1) << 8)|ptr.get_uint8(2)
+          else
+            ptr.get_uint8(0)|(ptr.get_uint8(1) << 8)|(ptr.get_uint8(2) << 16)
+          end
+        when 4
+          ptr.get_uint32(0)
+        end
+
+      SDL.UnlockSurface(@struct)
+
+      rgba = SDL::GetRGBA(pixel, @struct.format)
+
+      return Rubygame::Color.rgb255(rgba)
+
+    else
+
+      # Surface has a palette, so return a Palette::Slot.
+
+      SDL.LockSurface(@struct)
+
+      ptr = @struct.pixels + (y * @struct.pitch + x)
+      slot = ptr.get_uint8(0)
+     
+      SDL.UnlockSurface(@struct)
+
+      return self.palette.at(slot)
+
+    end
+
+  end
+
+
   # call-seq:
   #    get_at( [x,y] )
   #    get_at( x,y )

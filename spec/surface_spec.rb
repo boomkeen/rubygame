@@ -2987,3 +2987,163 @@ describe Surface, "#to_opengl" do
   end
 
 end
+
+
+
+describe Surface, "#[]" do
+
+  shared_examples_for "#[] method" do
+    it "should raise IndexError if x < 0" do
+      expect{ @surface[-1,0] }.to raise_error(IndexError)
+    end
+
+    it "should raise IndexError if x == w" do
+      expect{ @surface[@surface.w,0] }.to raise_error(IndexError)
+    end
+
+    it "should raise IndexError if x > w" do
+      expect{ @surface[@surface.w+1,0] }.to raise_error(IndexError)
+    end
+
+    it "should raise IndexError if y < 0" do
+      expect{ @surface[0,-1] }.to raise_error(IndexError)
+    end
+
+    it "should raise IndexError if y == h" do
+      expect{ @surface[0,@surface.h] }.to raise_error(IndexError)
+    end
+
+    it "should raise IndexError if y > h" do
+      expect{ @surface[0,@surface.h+1] }.to raise_error(IndexError)
+    end
+
+
+    it "should not raise error at [0,0]" do
+      expect{ @surface[0,0] }.not_to raise_error
+    end
+
+    it "should not raise error at [w-1,0]" do
+      expect{ @surface[@surface.w-1,0] }.not_to raise_error
+    end
+
+    it "should not raise error at [0,h-1]" do
+      expect{ @surface[0,@surface.h-1] }.not_to raise_error
+    end
+
+    it "should not raise error at [w-1,h-1]" do
+      expect{ @surface[@surface.w-1,@surface.h-1] }.not_to raise_error
+    end
+
+
+    it "should raise error if given no args" do
+      expect{ @surface[] }.to raise_error(ArgumentError)
+    end
+
+    it "should raise error if given only one arg" do
+      expect{ @surface[0] }.to raise_error(ArgumentError)
+    end
+
+    it "should raise error if given too many args" do
+      expect{ @surface[0,0,0] }.to raise_error(ArgumentError)
+    end
+
+    invalid_args = {
+      "true"        => true,
+      "false"       => false,
+      "nil"         => nil,
+      "a string"    => "str",
+      "a symbol"    => :sym,
+      "an array"    => [1,2],
+      "a hash"      => {1=>2},
+      "some object" => Object.new,
+    }
+
+    invalid_args.each do |thing, arg|
+      it "should raise TypeError if given #{thing}" do
+        expect{ @surface[arg,0] }.to raise_error
+      end
+    end
+
+    it "should not raise error if given floats" do
+      expect{ @surface[0.3,1.2] }.not_to raise_error
+    end
+  end
+
+
+  context "with palettized Surface" do
+    before :each do
+      @surface = Surface.new([2,2], :depth => 8)
+      @surface.palette = [[255,0,0],[0,255,0],[0,0,255],[255,255,255]]
+      @surface.fill([255,  0,  0], [0,0,1,1])
+      @surface.fill([  0,255,  0], [1,0,1,1])
+      @surface.fill([  0,  0,255], [0,1,1,1])
+      @surface.fill([255,255,255], [1,1,1,1])
+    end
+
+    it_should_behave_like "#[] method"
+
+    it "should be slot 0 at [0,0]" do
+      @surface[0,0].should eql( @surface.palette[0] )
+    end
+
+    it "slot color should be ColorRGB255 [255,0,0] at [0,0]" do
+      @surface[0,0].color.should eql( Color.rgb255([255,0,0]) )
+    end
+
+    it "should be slot 1 at [1,0]" do
+      @surface[1,0].should eql( @surface.palette[1] )
+    end
+
+    it "slot color should be ColorRGB255 [0,255,0] at [1,0]" do
+      @surface[1,0].color.should eql( Color.rgb255([0,255,0]) )
+    end
+
+    it "should be slot 2 at [0,1]" do
+      @surface[0,1].should eql( @surface.palette[2] )
+    end
+
+    it "slot color should be ColorRGB255 [0,0,255] at [0,1]" do
+      @surface[0,1].color.should eql( Color.rgb255([0,0,255]) )
+    end
+
+    it "should be slot 3 at [1,1]" do
+      @surface[1,1].should eql( @surface.palette[3] )
+    end
+
+    it "slot color should be ColorRGB255 [255,255,255] at [1,1]" do
+      @surface[1,1].color.should eql( Color.rgb255([255,255,255]) )
+    end
+  end
+
+
+  [15, 16, 24, 32].each do |depth|
+    context "with #{depth}-bit Surface" do
+      before :each do
+        @surface = Surface.new([2,2], :depth => depth)
+        @surface.fill([255,  0,  0], [0,0,1,1])
+        @surface.fill([  0,255,  0], [1,0,1,1])
+        @surface.fill([  0,  0,255], [0,1,1,1])
+        @surface.fill([255,255,255], [1,1,1,1])
+      end
+
+      it_should_behave_like "#[] method"
+
+      it "should be ColorRGB255 [255,0,0] at [0,0]" do
+        @surface[0,0].should eql( Color.rgb255([255,0,0]) )
+      end
+
+      it "should be ColorRGB255 [0,255,0] at [1,0]" do
+        @surface[1,0].should eql( Color.rgb255([0,255,0]) )
+      end
+
+      it "should be ColorRGB255 [0,0,255] at [0,1]" do
+        @surface[0,1].should eql( Color.rgb255([0,0,255]) )
+      end
+
+      it "should be ColorRGB255 [255,255,255] at [1,1]" do
+        @surface[1,1].should eql( Color.rgb255([255,255,255]) )
+      end
+    end
+  end
+
+end
